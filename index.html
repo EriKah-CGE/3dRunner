@@ -142,6 +142,7 @@
           <label class="opt"><input type="checkbox" name="cmd" value="duck" checked><span>Duck</span></label>
           <label class="opt"><input type="checkbox" name="cmd" value="left" checked><span>Left</span></label>
           <label class="opt"><input type="checkbox" name="cmd" value="right" checked><span>Right</span></label>
+          <label class="opt"><input type="checkbox" name="cmd" value="punch" checked><span>Punch</span></label>
         </div>
       </fieldset>
       <fieldset>
@@ -179,14 +180,14 @@ const TEMPOS = {
   fast:{speed:25, gapMin:2.0, gapMax:3.0},
 };
 const WORDS = {
-  en:{jump:"JUMP!", duck:"DUCK!", left:"LEFT!", right:"RIGHT!", go:"GO!", done:"YOU DID IT!", ready:"READY?"},
-  de:{jump:"SPRING!", duck:"DUCK DICH!", left:"LINKS!", right:"RECHTS!", go:"LOS!", done:"GESCHAFFT!", ready:"BEREIT?"},
+  en:{jump:"JUMP!", duck:"DUCK!", left:"LEFT!", right:"RIGHT!", punch:"PUNCH!", go:"GO!", done:"YOU DID IT!", ready:"READY?"},
+  de:{jump:"SPRING!", duck:"DUCK DICH!", left:"LINKS!", right:"RECHTS!", punch:"BOX!", go:"LOS!", done:"GESCHAFFT!", ready:"BEREIT?"},
 };
-const CMD_COLOR = {jump:0x3cb84a, duck:0x3577e0, left:0xf2a007, right:0xc14fd1};
-const CMD_CSS   = {jump:"#3cb84a", duck:"#3577e0", left:"#f2a007", right:"#c14fd1"};
+const CMD_COLOR = {jump:0x3cb84a, duck:0x3577e0, left:0xf2a007, right:0xc14fd1, punch:0xe23838};
+const CMD_CSS   = {jump:"#3cb84a", duck:"#3577e0", left:"#f2a007", right:"#c14fd1", punch:"#e23838"};
 // Dauer der Kamera-Moves; Auslösung erfolgt so früh, dass der SCHEITELPUNKT
 // der Bewegung genau beim Hindernis liegt (Timing-Fix)
-const MOVE_DUR = {jump:.75, duck:.75, left:.85, right:.85};
+const MOVE_DUR = {jump:.75, duck:.75, left:.85, right:.85, punch:.45};
 
 const CAM_Z=0, CAM_Y=3.1, BASE_FOV=72;
 const SPAWN_Z=-150, ROAD_W=9;
@@ -212,6 +213,7 @@ const sfx={
   prompt(){beep(700,.09);beep(940,.11,"square",.11);},
   coin(){beep(1250,.07,"triangle",0,.14);beep(1660,.1,"triangle",.06,.14);},
   clear(){beep(520,.1);beep(660,.1,"square",.1);beep(880,.18,"square",.2);},
+  punch(){beep(90,.15,"square",0,.4);beep(50,.22,"sine",.03,.5);beep(700,.05,"square",.01,.2);},
   finish(){[523,659,784,1047].forEach((f,i)=>beep(f,.22,"square",i*.16,.2));},
 };
 
@@ -406,6 +408,8 @@ const ASSET_NAMES=[
   "kk_rubble_large","kk_rubble_half","kk_torch","kk_column",
   "kk_bldg_A","kk_bldg_B","kk_bldg_C","kk_bldg_D","kk_bldg_E","kk_bldg_F","kk_bldg_G","kk_bldg_H",
   "kk_streetlight","kk_watertower",
+  "kk_crate_big","kk_crate_long","kk_barrel","kk_crates_stacked","kk_box_stacked","kk_box_large",
+  "kk_car_police","kk_car_taxi","kk_dumpster","kk_box_A","kk_box_B",
 ];
 const DOUBLE_SIDED=new Set(["Grass","Flowers","PalmTree_Leaves"]);
 const CUTOUT=new Set(["BirchTree_Leaves","MapleTree_Leaves","NormalTree_Leaves",
@@ -917,45 +921,152 @@ function starGeoMake(r=0.62){
 }
 const STAR_GEO=starGeoMake();
 
+function fitH(name, targetH) {
+  const m = MODELS[name].clone();
+  const box = new THREE.Box3().setFromObject(m);
+  const size = box.getSize(new THREE.Vector3());
+  const sc = targetH / size.y;
+  m.scale.setScalar(sc);
+  m.traverse(n => { if (n.isMesh) n.castShadow = true; });
+  return { m, w: size.x * sc, d: size.z * sc };
+}
+function neonAll(m) { m.traverse(n => { if (n.isMesh) n.material = NEON_MAT; }); return m; }
+
 function buildObstacle(type){
-  const g=new THREE.Group();
-  const neon=WORLD.key==="neon";
-  const mat=c=>neon
-    ? M(0x141230,{emissive:c,emissiveIntensity:1.1,roughness:.3})
-    : M(c,{roughness:.55});
-  if(type==="jump"){
-    const wall=new THREE.Mesh(new THREE.BoxGeometry(ROAD_W,1.3,1.3),mat(CMD_COLOR.jump));
-    wall.position.y=.65;wall.castShadow=true;g.add(wall);
-    const top=new THREE.Mesh(new THREE.BoxGeometry(ROAD_W,.24,1.6),
-      neon?MB(0xffffff):M(0xffffff));
-    top.position.y=1.4;top.castShadow=true;g.add(top);
+  const key=WORLD.key;
+  const g = new THREE.Group();
+  const arrowSign = (dir, x, neon) => {
+    const sh = new THREE.Shape();
+    sh.moveTo(0,0); sh.lineTo(-.9,.9); sh.lineTo(-.9,.35); sh.lineTo(-2.1,.35);
+    sh.lineTo(-2.1,-.35); sh.lineTo(-.9,-.35); sh.lineTo(-.9,-.9); sh.lineTo(0,0);
+    const arrow = new THREE.Mesh(new THREE.ExtrudeGeometry(sh,{depth:.25,bevelEnabled:false}), MB(0xffffff));
+    arrow.position.set(x, 3.6, .8);
+    if (dir === -1) arrow.scale.x = -1;
+    g.add(arrow); g.userData.pulse = arrow;
+    const post = new THREE.Mesh(new THREE.BoxGeometry(.22,3.6,.22),
+      neon ? M(0x141230,{emissive:0x18c8d8,emissiveIntensity:.4}) : M(0x9a6a3d,{roughness:.95}));
+    post.position.set(x, 1.8, .4); post.castShadow = true; g.add(post);
+  };
+  const crateRow = (name, h, y, neon) => {
+    const probe = fitH(name, h);
+    const n = Math.max(1, Math.ceil(ROAD_W / probe.w));
+    for (let i = 0; i < n; i++) {
+      const { m } = fitH(name, h);
+      if (neon) neonAll(m);
+      m.position.set(-ROAD_W/2 + probe.w*(i+.5), y, 0);
+      m.rotation.y = rnd(-.1, .1);
+      g.add(m);
+    }
+  };
+
+  if (key === "meadow") {
+    if (type === "jump") crateRow("kk_crate_long", 1.15, 0, false);
+    else if (type === "duck") {
+      const woodM = M(0x9a6a3d, { roughness: .95 });
+      [-1,1].forEach(s2 => { const p = new THREE.Mesh(new THREE.BoxGeometry(.3,3.7,.3), woodM);
+        p.position.set(s2*ROAD_W/2, 1.85, 0); p.castShadow = true; g.add(p); });
+      const probe = fitH("kk_crate_long", .5);
+      probe.m.scale.x *= ROAD_W / probe.w;
+      probe.m.position.y = 3.15; g.add(probe.m); g.userData.bob = probe.m;
+      for (let i = 0; i < 8; i++) {
+        const pen = new THREE.Mesh(new THREE.ConeGeometry(.16,.5,4),
+          MB([0xe84545,0xffd94a,0x3577e0,0x3cb84a][i%4]));
+        pen.rotation.x = Math.PI; pen.position.set(-ROAD_W/2+1+i, 2.72, 0);
+        g.add(pen);
+      }
+    }
+    else if (type === "left" || type === "right") {
+      const dir = type === "left" ? -1 : 1;
+      const { m } = fitH("kk_rock_E", 4.2);
+      m.position.set(-dir*ROAD_W/4, 0, 0); m.rotation.y = rnd(0, 6.28); g.add(m);
+      arrowSign(dir, dir*ROAD_W/4, false);
+    }
+    else { // punch: Kistenwand
+      crateRow("kk_crate_big", 1.15, 0, false);
+      crateRow("kk_crate_big", 1.15, 1.15, false);
+      const gl = glowSprite(0xff4030, 6); gl.position.y = 1.4;
+      g.add(gl); g.userData.punchGlow = gl;
+    }
   }
-  else if(type==="duck"){
-    const bar=new THREE.Mesh(new THREE.BoxGeometry(ROAD_W,.75,.75),mat(CMD_COLOR.duck));
-    bar.position.y=3.05;bar.castShadow=true;g.add(bar);g.userData.bob=bar;
-    [-1,1].forEach(s=>{
-      const p=new THREE.Mesh(new THREE.CylinderGeometry(.26,.26,3.6,8),
-        neon?M(0x141230,{emissive:0x8888aa,emissiveIntensity:.3}):M(0xfdf6e3));
-      p.position.set(s*ROAD_W/2,1.8,0);p.castShadow=true;g.add(p);
-    });
-    const l=new THREE.Mesh(new THREE.SphereGeometry(.32,10,8),MB(0xffe66d));
-    l.position.y=3.72;g.add(l);g.userData.blink=l;
+  else if (key === "jungle") {
+    if (type === "jump") { // umgestuerzte Saeule
+      const m = MODELS["kk_pillar"].clone();
+      m.scale.set(.87, 2.45, .87); m.rotation.z = Math.PI/2; m.position.y = .66;
+      m.traverse(n => { if (n.isMesh) n.castShadow = true; });
+      g.add(m);
+    }
+    else if (type === "duck") {
+      [-1,1].forEach(s2 => { const c = MODELS["kk_column"].clone();
+        c.scale.setScalar(2.6); c.position.set(s2*(ROAD_W/2-.3), 0, 0);
+        c.traverse(n => { if (n.isMesh) n.castShadow = true; }); g.add(c); });
+      const beam = MODELS["kk_column"].clone();
+      beam.scale.set(1.6, 7.4, 1.6); beam.rotation.z = Math.PI/2; beam.position.y = 3.3;
+      beam.traverse(n => { if (n.isMesh) n.castShadow = true; });
+      g.add(beam); g.userData.bob = beam;
+    }
+    else if (type === "left" || type === "right") {
+      const dir = type === "left" ? -1 : 1;
+      const { m } = fitH("kk_rubble_large", 3.8);
+      m.position.set(-dir*ROAD_W/4, 0, 0); g.add(m);
+      arrowSign(dir, dir*ROAD_W/4, false);
+    }
+    else { // punch: Kisten & Faesser
+      let x = -ROAD_W/2 + .8;
+      ["kk_crates_stacked","kk_box_stacked","kk_barrel","kk_crates_stacked","kk_box_large"].forEach(nm => {
+        const { m, w } = fitH(nm, nm === "kk_barrel" ? 1.4 : 2.1);
+        m.position.set(x + w/2, 0, 0); m.rotation.y = rnd(-.2, .2); g.add(m); x += w * .92;
+      });
+      const gl = glowSprite(0xff4030, 6); gl.position.y = 1.5;
+      g.add(gl); g.userData.punchGlow = gl;
+    }
   }
-  else{
-    const dir=type==="left"?-1:1, wallW=ROAD_W*.62;
-    const wall=new THREE.Mesh(new THREE.BoxGeometry(wallW,4.6,1.1),mat(CMD_COLOR[type]));
-    wall.position.set(-dir*(ROAD_W/2-wallW/2),2.3,0);wall.castShadow=true;g.add(wall);
-    const s=new THREE.Shape();
-    s.moveTo(0,0);s.lineTo(-.9,.9);s.lineTo(-.9,.35);s.lineTo(-2.1,.35);
-    s.lineTo(-2.1,-.35);s.lineTo(-.9,-.35);s.lineTo(-.9,-.9);s.lineTo(0,0);
-    const arrow=new THREE.Mesh(new THREE.ExtrudeGeometry(s,{depth:.25,bevelEnabled:false}),
-      MB(0xffffff));
-    arrow.position.set(wall.position.x+dir*.4,2.4,.65);
-    if(dir===-1)arrow.scale.x=-1;
-    g.add(arrow);g.userData.pulse=arrow;
+  else { // neon
+    if (type === "jump") {
+      const { m } = fitH(pick(["kk_car_police","kk_car_taxi"]), 1.35);
+      neonAll(m); m.rotation.y = Math.PI/2 * pick([1,-1]); g.add(m);
+      [-1,1].forEach(s2 => { const b = fitH(pick(["kk_box_A","kk_box_B"]), 1.1);
+        neonAll(b.m); b.m.position.set(s2*3.7, 0, 0); g.add(b.m); });
+    }
+    else if (type === "duck") {
+      [-1,1].forEach(s2 => { const p = new THREE.Mesh(new THREE.BoxGeometry(.28,3.8,.28),
+        M(0x141230,{emissive:0x202048,emissiveIntensity:.4}));
+        p.position.set(s2*ROAD_W/2, 1.9, 0); g.add(p); });
+      const sign = new THREE.Mesh(new THREE.BoxGeometry(ROAD_W,1.1,.3),
+        M(0x0d0c24,{emissive:0x101040,emissiveIntensity:.6}));
+      sign.position.y = 3.2; g.add(sign); g.userData.bob = sign;
+      [-1,1].forEach(s2 => { const tube = new THREE.Mesh(new THREE.BoxGeometry(ROAD_W,.08,.08),
+        MB(s2 < 0 ? 0x18c8d8 : 0xd83878));
+        tube.position.set(0, 3.2 + s2*.5, .18); g.add(tube); });
+      const gl = glowSprite(0x18c8d8, 5); gl.position.y = 3.2; g.add(gl);
+    }
+    else if (type === "left" || type === "right") {
+      const dir = type === "left" ? -1 : 1;
+      const { m } = fitH("kk_dumpster", 2.6);
+      neonAll(m); m.position.set(-dir*ROAD_W/4, 0, 0); m.rotation.y = rnd(-.3, .3); g.add(m);
+      for (let i = 0; i < 3; i++) {
+        const b = fitH(pick(["kk_box_A","kk_box_B"]), rnd(.9, 1.4));
+        neonAll(b.m);
+        b.m.position.set(-dir*(ROAD_W/4 + rnd(-1.8, 1.8)), 0, rnd(-.8, .8));
+        b.m.rotation.y = rnd(0, 6.28); g.add(b.m);
+      }
+      arrowSign(dir, dir*ROAD_W/4, true);
+    }
+    else { // punch: Neon-Boxenwand
+      const probe = fitH("kk_box_A", 1.15);
+      const n = Math.ceil(ROAD_W / probe.w);
+      for (let row = 0; row < 2; row++) for (let i = 0; i < n; i++) {
+        const { m } = fitH(pick(["kk_box_A","kk_box_B"]), 1.15);
+        neonAll(m);
+        m.position.set(-ROAD_W/2 + probe.w*(i+.5), row*1.15, 0);
+        m.rotation.y = rnd(-.08, .08); g.add(m);
+      }
+      const gl = glowSprite(0xff2d78, 7); gl.position.y = 1.4;
+      g.add(gl); g.userData.punchGlow = gl;
+    }
   }
   return g;
 }
+
 function buildStar(){
   const g=new THREE.Group();
   const m=new THREE.Mesh(STAR_GEO,WORLD.T.starMat());
@@ -1053,9 +1164,25 @@ function collectBurst(pos){
   scene.add(pts);
   S.bursts.push({pts,vel,t:0});
 }
+function punchBurst(z){
+  const n=36,ppos=new Float32Array(n*3),vel=[];
+  for(let i=0;i<n;i++){
+    ppos[i*3]=rnd(-2,2);ppos[i*3+1]=rnd(.6,2.2);ppos[i*3+2]=z;
+    const a=rnd(0,6.28);
+    vel.push(new THREE.Vector3(Math.cos(a)*rnd(3,8),rnd(3,9),rnd(2,7)));
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute("position",new THREE.BufferAttribute(ppos,3));
+  const mat=new THREE.PointsMaterial({color:0xffa030,size:.7,map:softGlow,
+    transparent:true,blending:THREE.AdditiveBlending,depthWrite:false});
+  const pts=new THREE.Points(geo,mat);
+  scene.add(pts);
+  S.bursts.push({pts,vel,t:0});
+}
 function triggerMove(type){
   S.move={type,t:0,dur:MOVE_DUR[type]};
-  S.cleared++;sfx.clear();
+  S.cleared++;
+  type==="punch"?sfx.punch():sfx.clear();
 }
 function showPrompt(type){
   promptEl.textContent=WORDS[S.lang][type];
@@ -1137,6 +1264,8 @@ function update(dt){
     if(o.mesh.userData.bob)o.mesh.userData.bob.position.y=3.05+Math.sin(t*3+o.mesh.position.z)*.15;
     if(o.mesh.userData.blink)o.mesh.userData.blink.material.color.setHex(
       Math.sin(t*8)>0?0xffe66d:0xff5d5d);
+    if(o.mesh.userData.punchGlow){const ps=6+Math.sin(t*6)*1.4;
+      o.mesh.userData.punchGlow.scale.set(ps,ps,1);}
     if(o.mesh.userData.pulse){const s=1+Math.sin(t*7)*.12;
       const px=o.mesh.userData.pulse.scale.x<0?-1:1;
       o.mesh.userData.pulse.scale.set(px*s,s,1);}
@@ -1203,7 +1332,13 @@ function update(dt){
     // TIMING-FIX: Bewegung startet so früh, dass ihr Scheitelpunkt
     // (halbe Move-Dauer) genau beim Hindernis liegt
     const lead=spd*MOVE_DUR[o.type]*0.5;
-    if(!o.done&&o.mesh.position.z>=CAM_Z-lead){o.done=true;triggerMove(o.type);}
+    if(!o.done&&o.mesh.position.z>=CAM_Z-lead){
+      o.done=true;triggerMove(o.type);
+      if(o.type==="punch"){
+        o.mesh.visible=false;
+        punchBurst(o.mesh.position.z);
+      }
+    }
   }
   S.obstacles=S.obstacles.filter(o=>{
     if(o.mesh.position.z>CAM_Z+8){disposeObj(o.mesh);return false;}return true;
@@ -1236,6 +1371,7 @@ function update(dt){
       case "duck":oy-=arc*1.7;fov-=arc*4;break;
       case "left":ox-=arc*2.8;roll+=arc*.12;break;
       case "right":ox+=arc*2.8;roll-=arc*.12;break;
+      case "punch":fov-=arc*9;oy+=arc*.15;roll+=Math.sin(p*Math.PI*2)*.06;break;
     }
     if(p>=1)S.move=null;
   }
