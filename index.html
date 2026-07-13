@@ -337,6 +337,7 @@ const render=()=>composer.render();
 /* ---- Weltkrümmung + optionaler Wind-Sway (Shader-Patch) ---- */
 const TIME={value:0};
 function curve(mat,sway=0){
+  mat.customProgramCacheKey=()=>"curve"+sway;  // sonst teilen sway/non-sway ein Programm
   mat.onBeforeCompile=sh=>{
     sh.uniforms.uTime=TIME;
     sh.vertexShader="uniform float uTime;\n"+sh.vertexShader.replace("#include <project_vertex>",`
