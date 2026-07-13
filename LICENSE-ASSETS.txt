@@ -1,6 +1,0 @@
-3D-Modelle & Texturen in assets/:
-"Ultimate Stylized Nature Pack" von Quaternius (quaternius.com)
-Lizenz: CC0 1.0 (Public Domain) – frei nutzbar, auch kommerziell, ohne Namensnennung.
-Konvertiert von FBX nach GLB mit FBX2glTF.
-
-Bibliotheken in lib/: three.js r128 (MIT-Lizenz, mrdoob/three.js)
