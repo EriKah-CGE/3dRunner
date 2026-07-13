@@ -447,6 +447,8 @@ function prepModel(root){
         if(DOUBLE_SIDED.has(m.name))m.side=THREE.DoubleSide;
       }
       m.needsUpdate=true;
+      n.geometry.userData.shared=true;   // Vorlagen-Ressourcen nie disposen
+      m.userData.shared=true;
       curve(m, SWAYING.has(m.name)?0.035:0);
     }
   });
@@ -471,12 +473,16 @@ ASSET_NAMES.forEach(n=>{
   gltfLoader.load("assets/"+n+".glb",g=>{MODELS[n]=prepModel(g.scene);});
 });
 manager.onProgress=(u,l,t)=>{$("startBtn").textContent=`Lade Modelle… ${l}/${t}`;};
+manager.onError=(url)=>{
+  $("startBtn").textContent="Ladefehler: "+url.split("/").pop();
+};
 manager.onLoad=()=>{
   const jr=MODELS["Rock_4"].clone();
   jr.traverse(n=>{
     if(n.isMesh){
       n.material=n.material.clone();
       n.material.map=tex("Rocks_Dark_Green");
+      n.material.userData.shared=true;
       curve(n.material);
     }
   });
@@ -485,6 +491,7 @@ manager.onLoad=()=>{
     map:tex("citybits_night"),emissiveMap:tex("citybits_glow"),
     emissive:new THREE.Color(0xffffff),emissiveIntensity:1.3,
     roughness:.85,metalness:0}));
+  NEON_MAT.userData.shared=true;
   $("startBtn").disabled=false;
   $("startBtn").textContent="Los geht's!";
   buildWorld("meadow");render();
@@ -537,7 +544,7 @@ const THEMES={
 /* ---------------- 🍄 Märchen-Pilzwelt ---------------- */
 meadow:{
   skyTop:"#3fa8e8", skyMid:"#8ed4f2", skyBot:"#ffd9a8",
-  fog:0xd4ecf4, fogNear:55, fogFar:190,
+  fog:0xd4ecf4, fogNear:48, fogFar:148,
   hemi:[0xeaf6ff,0x4f8a3a,0.65], sun:[0xffe8b0,2.1,[-25,45,-40]],
   exposure:.9, bloom:[.18,.5,.92],
   roadRepeat:110,
@@ -693,7 +700,7 @@ jungle:{
 /* ---------------- 🌌 Neon-Nacht ---------------- */
 neon:{
   skyTop:"#070518", skyMid:"#241448", skyBot:"#ff2d78",
-  fog:0x1a1038, fogNear:30, fogFar:150,
+  fog:0x1a1038, fogNear:30, fogFar:148,
   hemi:[0x5566ff,0x141030,0.62], sun:[0x99aaff,0.55,[0,50,-40]],
   exposure:1.15, bloom:[.6,.55,.45],
   roadRepeat:110,
@@ -768,7 +775,7 @@ neon:{
       const col=pick([0xd83878,0x18c8d8,0x9838c8]);
       const cr=new THREE.Mesh(new THREE.OctahedronGeometry(rnd(.7,1.4)),
         M(0x141230,{emissive:col,emissiveIntensity:.8,roughness:.3}));
-      cr.position.set(pick([-1,1])*rnd(6.5,12),rnd(.8,1.6),rnd(-TILE_LEN/2,TILE_LEN/2));
+      cr.position.set(pick([-1,1])*rnd(6.5,12),cr.geometry.parameters.radius*.92,rnd(-TILE_LEN/2,TILE_LEN/2));
       g.add(cr);
     }
   },
@@ -810,9 +817,10 @@ function addGrass(g,c1,c2,count){
 let WORLD=null;
 function disposeObj(o){
   o.traverse(n=>{
-    if(n.geometry&&!n.userData.sharedAsset)n.geometry.dispose?.();
-    if(n.material&&!n.userData.sharedAsset){
+    if(n.geometry&&!n.geometry.userData.shared)n.geometry.dispose?.();
+    if(n.material){
       (Array.isArray(n.material)?n.material:[n.material]).forEach(m=>{
+        if(m.userData&&m.userData.shared)return;
         if(m.map&&m.map!==softGlow&&!Object.values(TEX).includes(m.map))m.map.dispose();
         m.dispose();
       });
@@ -932,6 +940,7 @@ function starGeoMake(r=0.62){
     bevelSize:.05,bevelThickness:.05,bevelSegments:1});
 }
 const STAR_GEO=starGeoMake();
+STAR_GEO.userData.shared=true;
 
 function groundCenter(m, x = 0, z = 0) {
   const box = new THREE.Box3().setFromObject(m);
@@ -1008,7 +1017,8 @@ function buildObstacle(type){
       const probe = fitH("kk_crate_long", .5);
       probe.m.scale.x *= ROAD_W / probe.w;
       groundCenter(probe.m, 0, 0);
-      probe.m.position.y += 2.9; g.add(probe.m); g.userData.bob = probe.m;
+      probe.m.position.y += 2.9; g.add(probe.m);
+      g.userData.bob = probe.m; g.userData.bobBase = probe.m.position.y;
       for (let i = 0; i < 8; i++) {
         const pen = new THREE.Mesh(new THREE.ConeGeometry(.16,.5,4),
           MB([0xe84545,0xffd94a,0x3577e0,0x3cb84a][i%4]));
@@ -1046,7 +1056,8 @@ function buildObstacle(type){
       beam.traverse(n => { if (n.isMesh) n.castShadow = true; });
       groundCenter(beam, 0, 0);
       beam.position.y += 2.75;
-      g.add(beam); g.userData.bob = beam;
+      g.add(beam);
+      g.userData.bob = beam; g.userData.bobBase = beam.position.y;
     }
     else if (type === "left" || type === "right") {
       const dir = type === "left" ? -1 : 1;
@@ -1089,7 +1100,8 @@ function buildObstacle(type){
         p.position.set(s2*ROAD_W/2, 1.9, 0); g.add(p); });
       const sign = new THREE.Mesh(new THREE.BoxGeometry(ROAD_W,1.1,.3),
         M(0x0d0c24,{emissive:0x101040,emissiveIntensity:.6}));
-      sign.position.y = 3.2; g.add(sign); g.userData.bob = sign;
+      sign.position.y = 3.2; g.add(sign);
+      g.userData.bob = sign; g.userData.bobBase = 3.2;
       [-1,1].forEach(s2 => { const tube = new THREE.Mesh(new THREE.BoxGeometry(ROAD_W,.08,.08),
         MB(s2 < 0 ? 0x18c8d8 : 0xd83878));
         tube.position.set(0, 3.2 + s2*.5, .18); g.add(tube); });
@@ -1313,9 +1325,7 @@ function update(dt){
 
   S.starsArr.forEach(s=>{s.rotation.y+=3*dt;});
   for(const o of S.obstacles){
-    if(o.mesh.userData.bob)o.mesh.userData.bob.position.y=3.05+Math.sin(t*3+o.mesh.position.z)*.15;
-    if(o.mesh.userData.blink)o.mesh.userData.blink.material.color.setHex(
-      Math.sin(t*8)>0?0xffe66d:0xff5d5d);
+    if(o.mesh.userData.bob)o.mesh.userData.bob.position.y=o.mesh.userData.bobBase+Math.sin(t*3+o.mesh.position.z)*.15;
     if(o.mesh.userData.punchGlow){const ps=6+Math.sin(t*6)*1.4;
       o.mesh.userData.punchGlow.scale.set(ps,ps,1);}
     if(o.mesh.userData.pulse){const s=1+Math.sin(t*7)*.12;
@@ -1353,21 +1363,24 @@ function update(dt){
   const spd=S.speed,dz=spd*dt;
 
   WORLD.roadTex.offset.y-=dz/(440/WORLD.T.roadRepeat);
+  WORLD.roadTex.offset.y%=1;
   WORLD.tiles.forEach(tl=>{
     tl.position.z+=dz;
     if(tl.position.z-TILE_LEN/2>20)tl.position.z-=2*TILE_LEN;
   });
 
-  if(S.time<S.duration-4&&S.time>=S.nextSpawn){
+  const finishLead=(-SPAWN_Z)/spd;
+  if(!S.finish&&S.time<S.duration-finishLead-1&&S.time>=S.nextSpawn){
     spawnObstacle();S.nextSpawn=S.time+rnd(S.gapMin,S.gapMax);
   }
-  if(S.time>=S.duration-3&&!S.finish){
-    S.finish=buildFinish();S.finish.position.z=SPAWN_Z*.4;scene.add(S.finish);
+  if(S.time>=S.duration-finishLead&&!S.finish){
+    S.finish=buildFinish();S.finish.position.z=SPAWN_Z;scene.add(S.finish);
   }
   if(S.finish){
     S.finish.position.z+=dz;
     if(S.finish.position.z>=CAM_Z+2){
       S.phase="done";stopMusic();sfx.finish();
+      promptEl.classList.remove("show");S.promptT=0;
       $("doneTxt").textContent=WORDS[S.lang].done;
       $("doneStats").textContent=`★ ${S.starCount}   ·   ${S.cleared} Hindernisse`;
       $("doneOverlay").style.display="flex";
@@ -1482,8 +1495,12 @@ document.querySelectorAll('input[name=world]').forEach(r=>{
 $("pauseBtn").addEventListener("click",()=>setPaused(!S?.paused));
 $("quitBtn").addEventListener("click",endToMenu);
 $("fsBtn").addEventListener("click",()=>{
-  if(document.fullscreenElement)document.exitFullscreen();
-  else $("stage").requestFullscreen();
+  const el=$("stage");
+  if(document.fullscreenElement||document.webkitFullscreenElement){
+    (document.exitFullscreen||document.webkitExitFullscreen).call(document);
+  }else if(el.requestFullscreen){el.requestFullscreen();}
+  else if(el.webkitRequestFullscreen){el.webkitRequestFullscreen();}
+  else{alert("Vollbild wird von diesem Browser nicht unterstützt – am iPhone/iPad im Querformat nutzen.");}
 });
 addEventListener("keydown",e=>{
   if(e.code==="Space"&&S){e.preventDefault();setPaused(!S.paused);}
