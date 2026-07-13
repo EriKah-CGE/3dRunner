@@ -353,6 +353,16 @@ function curve(mat,sway=0){
   };
   return mat;
 }
+function curveSprite(mat){
+  mat.onBeforeCompile=sh=>{
+    sh.vertexShader=sh.vertexShader.replace(
+      "gl_Position = projectionMatrix * mvPosition;",
+      `float dC = max(0.0, -mvPosition.z);
+       mvPosition.y -= dC * dC * ${CURVE};
+       gl_Position = projectionMatrix * mvPosition;`);
+  };
+  return mat;
+}
 const M =(c,o={})=>curve(new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:.85,metalness:0},o)));
 const MB=(c,o={})=>curve(new THREE.MeshBasicMaterial(Object.assign({color:c},o)));
 
@@ -374,8 +384,8 @@ function glowTexMake(){
 }
 const softGlow=glowTexMake();
 function glowSprite(color,scale){
-  const s=new THREE.Sprite(new THREE.SpriteMaterial({
-    map:softGlow,color,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
+  const s=new THREE.Sprite(curveSprite(new THREE.SpriteMaterial({
+    map:softGlow,color,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false})));
   s.scale.set(scale,scale,1);
   return s;
 }
@@ -907,9 +917,9 @@ function buildWorld(key){
   }
   const pgeo=new THREE.BufferGeometry();
   pgeo.setAttribute("position",new THREE.BufferAttribute(ppos,3));
-  const parts=new THREE.Points(pgeo,new THREE.PointsMaterial({
+  const parts=new THREE.Points(pgeo,curve(new THREE.PointsMaterial({
     color:P.color,size:P.size,map:softGlow,transparent:true,opacity:.8,
-    blending:THREE.AdditiveBlending,depthWrite:false}));
+    blending:THREE.AdditiveBlending,depthWrite:false})));
   parts.userData={mode:P.mode,ymin:P.ymin,ymax:P.ymax};
   scene.add(parts);all.push(parts);
 
@@ -1222,8 +1232,8 @@ function collectBurst(pos){
   }
   const geo=new THREE.BufferGeometry();
   geo.setAttribute("position",new THREE.BufferAttribute(ppos,3));
-  const mat=new THREE.PointsMaterial({color:WORLD.T.starGlow,size:.5,map:softGlow,
-    transparent:true,blending:THREE.AdditiveBlending,depthWrite:false});
+  const mat=curve(new THREE.PointsMaterial({color:WORLD.T.starGlow,size:.5,map:softGlow,
+    transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
   const pts=new THREE.Points(geo,mat);
   scene.add(pts);
   S.bursts.push({pts,vel,t:0});
@@ -1237,8 +1247,8 @@ function punchBurst(z){
   }
   const geo=new THREE.BufferGeometry();
   geo.setAttribute("position",new THREE.BufferAttribute(ppos,3));
-  const mat=new THREE.PointsMaterial({color:0xffa030,size:.7,map:softGlow,
-    transparent:true,blending:THREE.AdditiveBlending,depthWrite:false});
+  const mat=curve(new THREE.PointsMaterial({color:0xffa030,size:.7,map:softGlow,
+    transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
   const pts=new THREE.Points(geo,mat);
   scene.add(pts);
   S.bursts.push({pts,vel,t:0});
