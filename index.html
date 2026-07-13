@@ -1382,9 +1382,10 @@ function update(dt){
   const t=performance.now()/1000;
   TIME.value=t;   // Wind-Sway-Uhr
 
+  const cloudDz=(S&&S.phase==="run"&&!S.paused)?S.speed*dt:0;   // Weltscroll nur im Lauf
   WORLD.clouds.forEach(c=>{
     c.position.x+=c.userData.v*dt;
-    c.position.z+=dz;                              // Wolken ziehen mit der Welt vorbei
+    c.position.z+=cloudDz;                         // Wolken ziehen mit der Welt vorbei
     if(c.position.z>25){                           // hinter der Kamera: vorn neu aufziehen
       c.position.z-=rnd(280,330);
       c.position.x=rnd(-90,90);
