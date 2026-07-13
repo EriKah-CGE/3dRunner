@@ -483,7 +483,7 @@ manager.onLoad=()=>{
   MODELS["Rock_4_jungle"]=jr;
   NEON_MAT=curve(new THREE.MeshStandardMaterial({
     map:tex("citybits_night"),emissiveMap:tex("citybits_glow"),
-    emissive:new THREE.Color(0xffffff),emissiveIntensity:1,
+    emissive:new THREE.Color(0xffffff),emissiveIntensity:1.3,
     roughness:.85,metalness:0}));
   $("startBtn").disabled=false;
   $("startBtn").textContent="Los geht's!";
@@ -668,8 +668,8 @@ jungle:{
     }
     // LANDMARKE: Ruinen-Torbogen ueber der Strecke
     const gate=MODELS["kk_wall_arched"].clone();
-    gate.scale.set(2.7,2.3,2.0);
-    gate.position.set(0,0,rnd(-TILE_LEN/2,TILE_LEN/2));
+    gate.scale.set(3.4,2.4,2.0);
+    groundCenter(gate,0,rnd(-TILE_LEN/2,TILE_LEN/2));
     g.add(gate);
   },
   critters(list){
@@ -683,22 +683,22 @@ jungle:{
 },
 /* ---------------- 🌌 Neon-Nacht ---------------- */
 neon:{
-  skyTop:"#04030f", skyMid:"#1b0f3d", skyBot:"#ff2d78",
-  fog:0x150a30, fogNear:28, fogFar:150,
-  hemi:[0x4455ff,0x0a0618,0.35], sun:[0x8899ff,0.35,[0,50,-40]],
-  exposure:1.0, bloom:[.5,.55,.5],
+  skyTop:"#070518", skyMid:"#241448", skyBot:"#ff2d78",
+  fog:0x1a1038, fogNear:30, fogFar:150,
+  hemi:[0x5566ff,0x141030,0.62], sun:[0x99aaff,0.55,[0,50,-40]],
+  exposure:1.15, bloom:[.6,.55,.45],
   roadRepeat:110,
   roadTex(){return canvasTex(256,256,(x)=>{
     x.fillStyle="#0b0a1e";x.fillRect(0,0,256,256);
-    x.strokeStyle="#18b8c8";x.lineWidth=5;
+    x.strokeStyle="#26d8e8";x.lineWidth=5;
     x.strokeRect(8,-4,240,264);
     x.strokeStyle="rgba(24,184,200,.3)";x.lineWidth=2;
     for(let y=0;y<=256;y+=64){x.beginPath();x.moveTo(8,y);x.lineTo(248,y);x.stroke();}
-    x.strokeStyle="#d02868";x.lineWidth=4;
+    x.strokeStyle="#f03488";x.lineWidth=4;
     x.setLineDash([28,36]);
     x.beginPath();x.moveTo(128,0);x.lineTo(128,256);x.stroke();
   });},
-  ground:["#0a0920","#12102e"],
+  ground:["#100e2c","#181440"],
   celestial(g){
     const t=canvasTex(256,256,(x)=>{
       const gr=x.createLinearGradient(0,0,0,256);
@@ -965,6 +965,21 @@ function buildObstacle(type){
       neon ? M(0x141230,{emissive:0x18c8d8,emissiveIntensity:.4}) : M(0x9a6a3d,{roughness:.95}));
     post.position.set(x, 1.8, .4); post.castShadow = true; g.add(post);
   };
+  const blockSide = (nm, h, dir, neon, ry = 0) => {
+    const m = MODELS[nm].clone();
+    m.rotation.y = ry;
+    let box = new THREE.Box3().setFromObject(m);
+    let size = box.getSize(new THREE.Vector3());
+    m.scale.setScalar(h / size.y);
+    box = new THREE.Box3().setFromObject(m);
+    size = box.getSize(new THREE.Vector3());
+    const maxW = ROAD_W * 0.62;
+    if (size.x > maxW) { m.scale.x *= maxW / size.x; size.x = maxW; }
+    if (neon) neonAll(m);
+    m.traverse(n => { if (n.isMesh) n.castShadow = true; });
+    groundCenter(m, -dir * (ROAD_W/2 - size.x/2), 0);
+    g.add(m);
+  };
   const crateRow = (name, h, y, neon) => {
     const probe = fitH(name, h);
     const n = Math.max(1, Math.ceil(ROAD_W / probe.w));
@@ -997,10 +1012,7 @@ function buildObstacle(type){
     }
     else if (type === "left" || type === "right") {
       const dir = type === "left" ? -1 : 1;
-      const { m } = fitH("kk_rock_E", 4.2);
-      m.rotation.y = rnd(0, 6.28);
-      groundCenter(m, -dir*ROAD_W/4, 0);
-      g.add(m);
+      blockSide("kk_rock_E", 4.0, dir, false, rnd(-.3, .3));
       arrowSign(dir, dir*ROAD_W/4, false);
     }
     else { // punch: Kistenwand
@@ -1032,9 +1044,7 @@ function buildObstacle(type){
     }
     else if (type === "left" || type === "right") {
       const dir = type === "left" ? -1 : 1;
-      const { m } = fitH("kk_rubble_large", 3.4);
-      groundCenter(m, -dir*ROAD_W/4, 0);
-      g.add(m);
+      blockSide("kk_rubble_large", 3.2, dir, false);
       arrowSign(dir, dir*ROAD_W/4, false);
     }
     else { // punch: Kisten & Faesser
@@ -1081,16 +1091,8 @@ function buildObstacle(type){
     }
     else if (type === "left" || type === "right") {
       const dir = type === "left" ? -1 : 1;
-      const { m } = fitH("kk_dumpster", 2.6);
-      neonAll(m); m.rotation.y = rnd(-.3, .3);
-      groundCenter(m, -dir*ROAD_W/4, 0);
-      g.add(m);
-      for (let i = 0; i < 3; i++) {
-        const b = fitH(pick(["kk_box_A","kk_box_B"]), rnd(.9, 1.4));
-        neonAll(b.m);
-        b.m.position.set(-dir*(ROAD_W/4 + rnd(-1.8, 1.8)), 0, rnd(-.8, .8));
-        b.m.rotation.y = rnd(0, 6.28); g.add(b.m);
-      }
+      blockSide("kk_dumpster", 2.6, dir, true, rnd(-.25, .25));
+      blockSide("kk_box_stacked", 1.9, dir, true);
       arrowSign(dir, dir*ROAD_W/4, true);
     }
     else { // punch: Neon-Boxenwand
