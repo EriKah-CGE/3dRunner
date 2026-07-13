@@ -1,0 +1,17 @@
+3D-Modelle & Texturen in assets/:
+
+1. Quaternius "Ultimate Stylized Nature Pack" (quaternius.com)
+   Dateien: BirchTree_*, MapleTree_*, NormalTree_*, PineTree_*, PalmTree_*,
+   Bush_*, Flower_*, Plant_*, Rock_*, Grass_* + textures/ (außer citybits_*)
+   Lizenz: CC0 1.0 (Public Domain)
+
+2. KayKit Game Assets von Kay Lousberg (kaylousberg.com)
+   Dateien: kk_*.glb – aus den Packs "Medieval Hexagon", "Dungeon Remastered"
+   und "City Builder Bits"; citybits_night/glow.png sind bearbeitete
+   Varianten des City-Builder-Atlas.
+   Lizenz: CC0 1.0 (Public Domain)
+
+Alle Assets frei nutzbar, auch kommerziell, ohne Namensnennung.
+Konvertierung/Bearbeitung: Blender 5.0 (GLB-Export).
+
+Bibliotheken in lib/: three.js r128 (MIT-Lizenz, mrdoob/three.js)
