@@ -667,10 +667,19 @@ jungle:{
       });
     }
     // LANDMARKE: Ruinen-Torbogen ueber der Strecke
-    const gate=MODELS["kk_wall_arched"].clone();
-    gate.scale.set(3.4,2.4,2.0);
-    groundCenter(gate,0,rnd(-TILE_LEN/2,TILE_LEN/2));
-    g.add(gate);
+    const gz=rnd(-TILE_LEN/2,TILE_LEN/2);
+    [-1,1].forEach(s2=>{
+      const p=MODELS["kk_pillar_dec"].clone();
+      p.scale.setScalar(1.7);
+      groundCenter(p,s2*(ROAD_W/2+1.0),gz);
+      g.add(p);
+    });
+    const lintel=MODELS["kk_pillar"].clone();
+    lintel.scale.set(1.3,3.4,1.3);
+    lintel.rotation.z=Math.PI/2;
+    groundCenter(lintel,0,gz);
+    lintel.position.y+=6.3;
+    g.add(lintel);
   },
   critters(list){
     // pulsierende Glühwürmchen
@@ -689,10 +698,10 @@ neon:{
   exposure:1.15, bloom:[.6,.55,.45],
   roadRepeat:110,
   roadTex(){return canvasTex(256,256,(x)=>{
-    x.fillStyle="#0b0a1e";x.fillRect(0,0,256,256);
-    x.strokeStyle="#26d8e8";x.lineWidth=5;
+    x.fillStyle="#191542";x.fillRect(0,0,256,256);
+    x.strokeStyle="#3ae8f8";x.lineWidth=5;
     x.strokeRect(8,-4,240,264);
-    x.strokeStyle="rgba(24,184,200,.3)";x.lineWidth=2;
+    x.strokeStyle="rgba(60,220,240,.5)";x.lineWidth=2;
     for(let y=0;y<=256;y+=64){x.beginPath();x.moveTo(8,y);x.lineTo(248,y);x.stroke();}
     x.strokeStyle="#f03488";x.lineWidth=4;
     x.setLineDash([28,36]);
@@ -958,12 +967,9 @@ function buildObstacle(type){
     sh.moveTo(0,0); sh.lineTo(-.9,.9); sh.lineTo(-.9,.35); sh.lineTo(-2.1,.35);
     sh.lineTo(-2.1,-.35); sh.lineTo(-.9,-.35); sh.lineTo(-.9,-.9); sh.lineTo(0,0);
     const arrow = new THREE.Mesh(new THREE.ExtrudeGeometry(sh,{depth:.25,bevelEnabled:false}), MB(0xffffff));
-    arrow.position.set(x, 3.6, .8);
+    arrow.position.set(dir * 2.6, 3.4, .5);
     if (dir === -1) arrow.scale.x = -1;
     g.add(arrow); g.userData.pulse = arrow;
-    const post = new THREE.Mesh(new THREE.BoxGeometry(.22,3.6,.22),
-      neon ? M(0x141230,{emissive:0x18c8d8,emissiveIntensity:.4}) : M(0x9a6a3d,{roughness:.95}));
-    post.position.set(x, 1.8, .4); post.castShadow = true; g.add(post);
   };
   const blockSide = (nm, h, dir, neon, ry = 0) => {
     const m = MODELS[nm].clone();
@@ -973,7 +979,7 @@ function buildObstacle(type){
     m.scale.setScalar(h / size.y);
     box = new THREE.Box3().setFromObject(m);
     size = box.getSize(new THREE.Vector3());
-    const maxW = ROAD_W * 0.62;
+    const maxW = ROAD_W * 0.55;
     if (size.x > maxW) { m.scale.x *= maxW / size.x; size.x = maxW; }
     if (neon) neonAll(m);
     m.traverse(n => { if (n.isMesh) n.castShadow = true; });
